@@ -1,0 +1,51 @@
+#!/bin/bash
+
+# Output file
+output_file="fusion_search.txt"
+
+# Print the header to the output file
+echo -e "sample_id\tfiveprimepartner\tthreeprimepartner\tfiveprime_chr\tfiveprime_junction\tfiveprime_strand\tthreeprime_chr\tthreeprime_junction\tthreeprime_strand\tpath" > $output_file
+
+# Path to the mapping file
+mapping_file="bam_mapping.csv"
+
+# Print the content of the mapping file for debugging
+echo "Content of bam_mapping.csv:"
+cat $mapping_file
+echo ""
+
+# Loop through each FusionReport.Table.txt file in the current directory
+for file_path in SRR*.FusionReport.Table.txt; do
+  # Extract sample_id from the filename
+  sample_id=$(echo $file_path | cut -d'.' -f1)
+  echo "Processing sample_id: $sample_id"  # Debug statement
+
+  # Find the corresponding BAM file for the sample_id from the mapping file
+  bam_file=$(awk -v sample_id="$sample_id" 'BEGIN {FS=","} $1 == sample_id {print $2}' $mapping_file)
+  echo "Found BAM file: $bam_file for sample_id: $sample_id"  # Debug statement
+
+  # Check if the file exists and bam_file is not empty
+  if [ -f $file_path ] && [ -n "$bam_file" ]; then
+    # Process the file
+    awk -v sample_id="$sample_id" -v path="$bam_file" 'BEGIN { FS="\t"; OFS="\t" }
+      NR>1 {
+        # Extract components for fiveprime and threeprime
+        split($5, strand_parts, "/");
+
+        # Assign values to respective variables, column names from the fusion result
+        fiveprimepartner = $10;
+        threeprimepartner = $14;
+        fiveprime_chr = $6;
+        fiveprime_junction = $7;
+        fiveprime_strand = substr(strand_parts[1], 1, 1); # Extract first character for fiveprime_strand
+        threeprime_chr = $8;
+        threeprime_junction = $9;
+        threeprime_strand = substr(strand_parts[1], 2);   # Extract second character for threeprime_strand
+
+        # Prepare the output with all required columns
+        print sample_id, fiveprimepartner, threeprimepartner, fiveprime_chr, fiveprime_junction, fiveprime_strand, threeprime_chr, threeprime_junction, threeprime_strand, path;
+      }' $file_path >> $output_file
+  else
+    echo "Skipping sample_id: $sample_id because file does not exist or BAM file is not found"  # Debug statement
+  fi
+done
