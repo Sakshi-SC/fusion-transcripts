@@ -1,0 +1,5 @@
+#to add fusio_id column
+ awk 'BEGIN {FS=OFS="\t"; fusion_id=1} NR==1 {print "fusion_id", $0} NR>1 {$0=fusion_id++ OFS $0; print}' output.tsv > output_with_fusion_id.tsv
+ 
+#to rearrange the clumn as per my requirement
+awk -F'\t' 'BEGIN {OFS="\t"} {print $1, $2, $3, $4, $5, $12, $6, $13, $7, $8, $14, $9, $15, $10, $11}' output_with_fusion_id.tsv > fusion_search_table.txt
