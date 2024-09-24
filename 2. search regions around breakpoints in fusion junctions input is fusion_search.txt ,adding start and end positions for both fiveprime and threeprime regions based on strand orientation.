@@ -1,0 +1,74 @@
+#!/bin/bash
+
+# Define padding constants (adjust these according to your requirements)
+padding_upstream=500  # Adjust as needed
+padding_downstream=500  # Adjust as needed
+
+# Function to calculate search start and end based on breakpoint and strand
+# Parameters:
+#   bp          : Breakpoint position 
+#   strand      : Strand orientation ('+' for positive strand, '-' for negative strand)
+#   padding_up  : Number of bases to search upstream from the breakpoint
+#   padding_down: Number of bases to search downstream from the breakpoint
+#
+# Logic:
+#   - For the positive strand ('+'):
+#       - The search region starts 'padding_up' bases upstream of the breakpoint (bp - padding_up)
+#       - The search region ends 'padding_down' bases downstream of the breakpoint (bp + padding_down)
+#   - For the negative strand ('-'):
+#       - The search region starts 'padding_down' bases upstream of the breakpoint (bp - padding_down)
+#       - The search region ends 'padding_up' bases downstream of the breakpoint (bp + padding_up)
+#   - If the strand orientation is neither '+' nor '-', an error message is returned
+
+calculate_search_regions() {
+    bp=$1
+    strand=$2
+    padding_up=$3
+    padding_down=$4
+
+    if [[ $strand == '+' ]]; then
+        search_start=$(( bp - padding_up ))
+        search_end=$(( bp + padding_down ))
+    elif [[ $strand == '-' ]]; then
+        search_start=$(( bp - padding_down ))
+        search_end=$(( bp + padding_up ))
+    else
+        echo "Unexpected strand orientation: $strand"
+        return 1
+    fi
+
+    echo "$search_start $search_end"
+}
+
+# Input and output file paths
+input_file='fusion_search.txt'
+output_file='output.tsv'  # Output file where results will be written
+
+# Write header to output file
+head -n 1 "$input_file" | sed 's/$/\tfiveprime_search_start\tfiveprime_search_end\tthreeprime_search_start\tthreeprime_search_end/' > "$output_file"
+
+# Process each line in fusion_search.txt
+tail -n +2 "$input_file" | while IFS=$'\t' read -r sample_id fiveprimepartner threeprimepartner fiveprime_chr fiveprime_junction fiveprime_strand threeprime_chr threeprime_junction threeprime_strand path _; do
+    # Calculate search regions for fiveprime and threeprime
+    search_regions=$(calculate_search_regions "$fiveprime_junction" "$fiveprime_strand" "$padding_upstream" "$padding_downstream")
+    if [[ $? -ne 0 ]]; then
+        continue
+    fi
+    read -r fiveprime_search_start fiveprime_search_end <<< "$search_regions"
+
+    search_regions=$(calculate_search_regions "$threeprime_junction" "$threeprime_strand" "$padding_upstream" "$padding_downstream")
+    if [[ $? -ne 0 ]]; then
+        continue
+    fi
+    read -r threeprime_search_start threeprime_search_end <<< "$search_regions"
+
+    # Append calculated search regions to output file, retaining original chromosome names
+    echo -e "$sample_id\t$fiveprimepartner\t$threeprimepartner\t$fiveprime_chr\t$fiveprime_junction\t$fiveprime_strand\t$threeprime_chr\t$threeprime_junction\t$threeprime_strand\t$path\t$fiveprime_search_start\t$fiveprime_search_end\t$threeprime_search_start\t$threeprime_search_end" >> "$output_file"
+done
+
+# Convert the file to Unix line endings
+# Correct `sed` command to remove carriage returns
+sed -i 's/\r//' "$output_file"
+
+
+echo "Output written to $output_file"
